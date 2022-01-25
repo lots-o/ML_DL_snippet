@@ -54,7 +54,7 @@ class BernoulliNB(object):
         P(C_k)=N_k/N : prior
         """
         for label in self._y:
-            self._l_k[label]=self._n_k_w_t[label]/(self._N_k[label]+self._smoothing)
+            self._l_k[label]=(self._n_k_w_t[label]+self._smoothing)/(self._N_k[label]+self._smoothing*len(self._vocab))
             self._p_k[label]=self._N_k[label]/self._N
            
         
