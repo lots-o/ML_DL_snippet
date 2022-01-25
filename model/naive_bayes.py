@@ -15,12 +15,12 @@ class BernoulliNB(object):
     """
     Bernoulli document model 
     A document is represented by a feature vector with binary elements 
-    taking value 1 if the corresponding wordb is present in the document 
+    taking value 1 if the corresponding word is present in the document 
     and 0 if the word is not present 
     """    
-    def __init__(self,X:List[str],y:List[int],vocab:Dict[str,int],smoothing=1) -> None:
+    def __init__(self,X:List[List[int]],y:List[int],smoothing=1) -> None:
         assert len(X) == len(y)
-        self._vocab=vocab # {word: idx}
+        self._feature_dim=X.shape[1] # vocab size 
         self._X=X
         self._y=y
         self._smoothing=smoothing
@@ -28,21 +28,14 @@ class BernoulliNB(object):
         self._l_k=defaultdict(list) # The likelihood P(w_t|C_k)
         self._p_k=defaultdict(float) # The priors P(C_k)
 
-    def _gen_embedding(self,doc:str):
-        embedding=[0]*len(self._vocab)
-        for word in doc.split():
-            if word in self._vocab.keys():
-                embedding[self._vocab[word]]=1
-        return embedding
-
     def _extract_information(self,X,y):
         N=len(X)  # The total number of documents
         N_k=defaultdict(int) # The number of documents labelled with class C=k, for k=1,...,K
         n_k_w_t=defaultdict(lambda : defaultdict(int)) #The number of documents of class C=k containing word w_t for every class and for each word in vocab
         d_k=defaultdict(list) # The vector of document class C=k 
-        for doc,label in zip(X,y):
+        for doc_embedding,label in zip(X,y):
             N_k[label]+=1
-            d_k[label].append(self._gen_embedding(doc))
+            d_k[label].append(doc_embedding)
         for label,docs_embedding in d_k.items():
             n_k_w_t[label]=np.array(docs_embedding).sum(axis=0)
         return N,N_k,n_k_w_t,d_k
@@ -54,26 +47,38 @@ class BernoulliNB(object):
         P(C_k)=N_k/N : prior
         """
         for label in self._y:
-            self._l_k[label]=(self._n_k_w_t[label]+self._smoothing)/(self._N_k[label]+self._smoothing*len(self._vocab))
+            self._l_k[label]=(self._n_k_w_t[label]+self._smoothing)/(self._N_k[label]+self._smoothing*self._feature_dim)
             self._p_k[label]=self._N_k[label]/self._N
            
         
-    def predict(self,X:List[str]):
+    def predict(self,X:List[List[int]]):
         preds=[]
         probs=[0]*len(np.unique(self._y))
         for doc in tqdm(X):
-            embedding=np.array(self._gen_embedding(doc))
             for label in sorted(np.unique(self._y)):
-                probs[label]=self._p_k[label]*np.prod(self._l_k[label]*embedding + (1-embedding)*(1-self._l_k[label]))
+                probs[label]=self._p_k[label]*np.prod(self._l_k[label]*doc + (1-doc)*(1-self._l_k[label]))
             preds.append(np.argmax(probs))
         
         return np.array(preds)
 
 
+def gen_bernoulli_embedding(X:List[str],vocab:Dict[str,int]):
+    """
+    Generate feature vectors with binary elements 
+    taking value 1 if the corresponding word is present in the document 
+    and 0 if the word is not present 
+    """
+    embeddings=[]
+    for doc in X:
+        doc_embedding=[0]*len(vocab)
+        for word in doc.split():
+            if word in vocab.keys():
+                doc_embedding[vocab[word]]=1
+        embeddings.append(doc_embedding)
+    return np.array(embeddings)
 
-if __name__ == "__main__":
-    
-    # Dataset 
+def main():
+        # Dataset 
     train_df=pd.read_csv('data/IMDB/train.csv')
     test_df=pd.read_csv('data/IMDB/test.csv')
 
@@ -82,13 +87,24 @@ if __name__ == "__main__":
 
     
     cv=CountVectorizer(lowercase=True,analyzer="word",stop_words="english",min_df=50).fit(x_train.tolist())
-    #Train
-    model=BernoulliNB(X=x_train,y=y_train,vocab=cv.vocabulary_)
-    model.fit()
+    if model_tp =='Bernoulli':
+        x_train_embedding=gen_bernoulli_embedding(x_train,cv.vocabulary_)
+        x_test_embedding=gen_bernoulli_embedding(x_test,cv.vocabulary_)
+        # Train
+        model=BernoulliNB(X=x_train_embedding,y=y_train)
+        model.fit()
+        # Test
+        y_preds=model.predict(x_test_embedding)
+        print(f'Accuracy : {(y_preds==y_test).sum()/len(y_preds)}')
 
-    #Test
-    y_preds=model.predict(x_test)
-    print(f'Accuracy : {(y_preds==y_test).sum()/len(y_preds)}')
+    elif model_tp =="Multinomial":
+        pass
 
+
+if __name__ == "__main__":
+    global model_tp 
+    
+    model_tp='Bernoulli'
+    main()
 
 
