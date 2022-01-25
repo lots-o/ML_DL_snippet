@@ -24,7 +24,7 @@ class BernoulliNB(object):
         self._X=X
         self._y=y
         self._smoothing=smoothing
-        self._N,self._N_k,self._n_k_w_t,self._d_k=self._extract_information(X,y)
+        self._N,self._N_k,self._n_k_w_t=self._extract_information(X,y)
         self._l_k=defaultdict(list) # The likelihood P(w_t|C_k)
         self._p_k=defaultdict(float) # The priors P(C_k)
 
@@ -38,7 +38,7 @@ class BernoulliNB(object):
             d_k[label].append(doc_embedding)
         for label,docs_embedding in d_k.items():
             n_k_w_t[label]=np.array(docs_embedding).sum(axis=0)
-        return N,N_k,n_k_w_t,d_k
+        return N,N_k,n_k_w_t
                
     def fit(self):
         """
