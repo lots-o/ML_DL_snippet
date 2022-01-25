@@ -76,6 +76,57 @@ def gen_bernoulli_embedding(X:List[str],vocab:Dict[str,int]):
                 doc_embedding[vocab[word]]=1
         embeddings.append(doc_embedding)
     return np.array(embeddings)
+class MultinomialNB(object):
+    """
+    Multinomial document model
+    A document is represented by a feature vector with integer elements
+    whose value is the frequency of that word in the document
+    """
+    def __init__(self,X:List[List[str]],y:List[int],smoothing=1) -> None:
+        assert len(X) == len(y) 
+        self._X=X
+        self._y=y
+        self._feature_dim=len(X[1]) # vocab size
+        self._smoothing=smoothing
+        self._N,self._N_k,self._n_k_w_t=self._extract_information(X,y)
+        self._l_k=defaultdict(list) # The likelihood P(w_t|C_k)
+        self._p_k=defaultdict(float) # The priors P(C_k)
+
+    def _extract_information(self,X,y):
+        N=len(self._X) # The total number of documents,
+        N_k=defaultdict(int) # N_k the number of documents labelled with class C=k, for each class k=1, . . . , K,
+        n_k_w_t=defaultdict(lambda : defaultdict(int)) # The relative frequency of w_t in documents of class k with respect to the total number of words in documents of that class 
+        d_k=defaultdict(list) # The vector of document class C=k 
+        for doc_embedding,label in zip(X,y):
+            N_k[label]+=1
+            d_k[label].append(doc_embedding)
+        for label,docs_embedding in d_k.items():
+            n_k_w_t[label]=np.array(docs_embedding).sum(axis=0)
+
+        return N,N_k,n_k_w_t
+
+    def fit(self):
+        """
+        Estimate the likelihoods, priors
+        P(w_t|C_k)=n_k(w_t)/sum(n_k_w_s), s=1,...|vocab|: likelihood
+        P(C_k)=N_k/N : prior
+        """
+        for label in self._y:
+            self._l_k[label]=(self._n_k_w_t[label]+self._smoothing)/(np.sum(self._n_k_w_t[label])+self._smoothing*self._feature_dim)
+            self._p_k[label]=self._N_k[label]/self._N
+
+    def predict(self,X:List[List[str]]):
+        preds=[]
+        probs=[0]*len(np.unique(self._y))
+        for doc in tqdm(X):
+            for label in sorted(np.unique(self._y)):
+                probs[label]=self._p_k[label]*np.prod(self._l_k[label][np.where(doc!=0)])
+            preds.append(np.argmax(probs))
+        
+        return np.array(preds)
+
+
+
 
 def main():
         # Dataset 
@@ -90,15 +141,19 @@ def main():
     if model_tp =='Bernoulli':
         x_train_embedding=gen_bernoulli_embedding(x_train,cv.vocabulary_)
         x_test_embedding=gen_bernoulli_embedding(x_test,cv.vocabulary_)
-        # Train
         model=BernoulliNB(X=x_train_embedding,y=y_train)
-        model.fit()
-        # Test
-        y_preds=model.predict(x_test_embedding)
-        print(f'Accuracy : {(y_preds==y_test).sum()/len(y_preds)}')
 
     elif model_tp =="Multinomial":
-        pass
+        x_train_embedding=cv.transform(x_train).toarray()
+        x_test_embedding=cv.transform(x_test).toarray()
+        model=MultinomialNB(X=x_train_embedding,y=y_train)
+    
+    #Train
+    model.fit()
+    #Test
+    y_preds=model.predict(x_test_embedding)
+    print(f'Accuracy : {(y_preds==y_test).sum()/len(y_preds)}')
+
 
 
 if __name__ == "__main__":
